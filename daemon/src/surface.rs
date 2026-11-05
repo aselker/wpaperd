@@ -179,6 +179,13 @@ impl Surface {
         let adjusted_width = self.display_info.adjusted_width();
         let adjusted_height = self.display_info.adjusted_height();
         let scale_pending = self.pending_scale.is_some();
+        // Set the new scale right before eglSwapBuffers (in context.draw() below): the swap
+        // commits it together with the first buffer at the new size. Applying it after the
+        // swap pairs the new buffer with the old scale, which is invalid_size (wl_surface
+        // error 2) whenever the new size isn't divisible by the old scale, e.g. scale 3 -> 2.
+        if let Some(scale) = self.pending_scale.take() {
+            self.wl_surface.set_buffer_scale(scale);
+        }
 
         // Use the correct context before drawing
         let context = self.get_context()?;
@@ -190,10 +197,6 @@ impl Surface {
         let transition_running = context.renderer.update_transition_status();
         if transition_running {
             context.draw().wrap_err("Failed to draw the transition")?;
-            // Apply a deferred scale change now that we have a fresh buffer.
-            if let Some(scale) = self.pending_scale.take() {
-                self.wl_surface.set_buffer_scale(scale);
-            }
             self.wl_surface
                 .damage_buffer(0, 0, adjusted_width, adjusted_height);
             self.queue_draw(qh);
@@ -211,11 +214,6 @@ impl Surface {
         }
 
         context.draw().wrap_err("Failed to draw the wallpaper")?;
-
-        // Apply a deferred scale change now that we have a fresh buffer.
-        if let Some(scale) = self.pending_scale.take() {
-            self.wl_surface.set_buffer_scale(scale);
-        }
 
         // Mark the entire surface as damaged and commit
         self.wl_surface
