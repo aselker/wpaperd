@@ -72,8 +72,10 @@ impl EglContext {
                 display_info.adjusted_height(),
             )
         } else {
-            // If we don't know the size of the output yet, just use a 10x10 window
-            (10, 10)
+            // If we don't know the size of the output yet, use a small window. Mesa can still
+            // commit one buffer at this size after a resize, so it must be divisible by the
+            // buffer scale or the compositor kills the connection (wl_surface error 2).
+            (10 * display_info.scale, 10 * display_info.scale)
         };
         let wl_egl_surface = WlEglSurface::new(wl_surface.id(), initial_width, initial_height)
             .wrap_err("Failed to create a WlEglSurface")?;
