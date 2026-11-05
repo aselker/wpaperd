@@ -281,6 +281,12 @@ fn run(opts: Opts, xdg_dirs: BaseDirectories) -> Result<()> {
         event_loop
             .dispatch(None, &mut wpaperd)
             .wrap_err("Failed to dispatch the event loop")?;
+
+        // calloop-wayland-source swallows protocol errors, so without this check we would
+        // busy-loop on the dead connection instead of exiting.
+        if let Some(err) = conn.protocol_error() {
+            return Err(eyre!("{err}")).wrap_err("Wayland connection closed by protocol error");
+        }
     }
 }
 
