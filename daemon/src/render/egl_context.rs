@@ -230,6 +230,19 @@ impl EglContext {
 
 impl Drop for EglContext {
     fn drop(&mut self) {
+        // The renderer is dropped after this function and deletes its GL objects in whatever
+        // context is current. If that's another display's context, we delete *its* objects
+        // (GL names are per-context and overlap), and its next draw can segfault.
+        // EGL defers destroying a current context/surface until it's released, so this is safe.
+        if let Err(err) = self.make_current() {
+            warn!(
+                "{:?}",
+                err.wrap_err(format!(
+                    "Failed to make EGL context current before dropping it for display {}",
+                    self.display_name
+                ))
+            );
+        }
         if let Err(err) = egl.destroy_surface(self.display, self.surface) {
             warn!(
                 "{:?}",
